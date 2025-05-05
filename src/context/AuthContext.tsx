@@ -1,22 +1,24 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { ReactNode, } from "react";
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import {
+import { 
   onAuthStateChanged,
   signOut as firebaseSignOut,
   User,
   GoogleAuthProvider,
   GithubAuthProvider,
   FacebookAuthProvider,
+  
   signInWithPopup,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  AuthError,
+  AuthError
 } from 'firebase/auth';
 import { auth } from '@/lib/firebase/config';
 import type { AuthProvider as FirebaseAuthProvider } from 'firebase/auth';
 import type { z } from 'zod';
+
 import type { loginSchema, registerSchema } from '@/schemas/auth';
 
 type AuthContextType = {
@@ -38,14 +40,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<AuthError | null>(null);
 
+  
   useEffect(() => {
+    console.log('AuthContext useEffect called');
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      console.log('onAuthStateChanged called:', currentUser);
       setUser(currentUser);
       setLoading(false);
       setError(null); // Clear error on auth state change
-    });
+      });
     return () => unsubscribe();
   }, []);
+
 
   const handleAuthError = (err: unknown) => {
      if (err instanceof Error && 'code' in err && 'message' in err) {
@@ -61,43 +67,83 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setLoading(false);
   }
 
+
+  const handlePopupError = (err: unknown) => {
+    if (typeof err === 'object' && err !== null && 'code' in err && err.code === 'auth/popup-blocked') {
+      alert(
+        'Popup blocked! Please allow popups for this site to sign in. You can enable it by clicking in the top right corner of the address bar.'
+      );
+    } else {
+        console.error('Firebase Auth Popup Error:', err); 
+    }
+  }
+
+  
+  
+
+
   const socialSignIn = async (provider: FirebaseAuthProvider) => {
     setLoading(true);
     setError(null);
     try {
-      await signInWithPopup(auth, provider);
-      // Auth state listener will handle setting user and loading state
+      const result = await signInWithPopup(auth, provider);
+      
     } catch (err) {
+        handlePopupError(err);
         handleAuthError(err);
+        setTimeout(() => {
+          window.location.assign('/auth/login');
+        }, 500);
     }
   };
 
-  const signInWithGoogle = () => socialSignIn(new GoogleAuthProvider());
-  const signInWithGithub = () => socialSignIn(new GithubAuthProvider());
-  const signInWithFacebook = () => socialSignIn(new FacebookAuthProvider()); // Note: Requires Facebook App setup
+  const googleSignIn = async () => {
+    await socialSignIn(new GoogleAuthProvider());
+    setTimeout(() => {
+        window.location.assign('/dashboard');    
+    }, 500);
+
+  }
+  const githubSignIn = async () => {
+    await socialSignIn(new GithubAuthProvider());
+    setTimeout(() => {
+        window.location.assign('/dashboard');
+    }, 500);
+    
+  }
+  const facebookSignIn = async () => {
+    await socialSignIn(new FacebookAuthProvider()); // Note: Requires Facebook App setup
+    setTimeout(() => {
+        window.location.assign('/dashboard');
+    }, 500);
+
+    
+  }
 
   const registerWithEmail = async (data: z.infer<typeof registerSchema>) => {
+
     setLoading(true);
     setError(null);
-    try {
-      await createUserWithEmailAndPassword(auth, data.email, data.password);
-      // Auth state listener will handle setting user and loading state
+      try {
+          await createUserWithEmailAndPassword(auth, data.email, data.password);
+          window.location.assign('/dashboard');
     } catch (err) {
-      handleAuthError(err);
+        handleAuthError(err)
     }
-  };
+    };
 
-  const loginWithEmail = async (data: z.infer<typeof loginSchema>) => {
-    setLoading(true);
-    setError(null);
-    try {
-      await signInWithEmailAndPassword(auth, data.email, data.password);
-       // Auth state listener will handle setting user and loading state
-    } catch (err) {
-       handleAuthError(err);
-    }
+  const emailSignIn = async (data: z.infer<typeof loginSchema>) => {
+        setError(null);
+        try {
+            await signInWithEmailAndPassword(auth, data.email, data.password);
+            setTimeout(() => {
+                window.location.assign('/dashboard');
+            }, 500);
+        } catch (err) {
+            handlePopupError(err);
+            handleAuthError(err);
+        }
   };
-
 
   const signOut = async () => {
     setLoading(true);
@@ -114,11 +160,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     user,
     loading,
     error,
-    signInWithGoogle,
-    signInWithGithub,
-    signInWithFacebook,
+    signInWithGoogle: googleSignIn,
+    signInWithGithub: githubSignIn,
+    signInWithFacebook: facebookSignIn,
     registerWithEmail,
-    loginWithEmail,
     signOut,
   };
 

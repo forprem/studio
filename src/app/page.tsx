@@ -10,6 +10,7 @@ export default function HomePage() {
   const router = useRouter();
 
   useEffect(() => {
+    console.log("page.tsx: useEffect - user:", user, "loading:", loading);
     if (!loading) {
       if (user) {
         router.replace('/dashboard'); // Use replace to avoid adding to history
