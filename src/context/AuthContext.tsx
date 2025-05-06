@@ -14,9 +14,11 @@ import {
   signInWithPopup,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  AuthError
+  AuthError,
+  getRedirectResult,
+  UserCredential
 } from 'firebase/auth';
-import { auth } from '@/lib/firebase/config';
+import { auth as firebaseAuth } from '@/lib/firebase/config';
 import type { AuthProvider as FirebaseAuthProvider } from 'firebase/auth';
 
 import type { z } from 'zod';
@@ -42,10 +44,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<AuthError | null>(null);
   const router = useRouter();
+  console.log('AuthContext AuthProvider component rendered. Initial firebaseAuth value:', firebaseAuth);
 
   useEffect(() => {
     console.log('AuthContext useEffect called');
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(firebaseAuth, (currentUser) => {
       console.log('onAuthStateChanged called:', currentUser);
       setUser(currentUser);
       setLoading(false);
@@ -54,6 +57,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    console.log('AuthContext redirect handler useEffect called');
+    console.log('Value of firebaseAuth object:', firebaseAuth);
+    getRedirectResult(firebaseAuth)
+      .then((result: UserCredential | null) => {
+        if (result && result.user) {
+          // User signed in with redirect
+          console.log("Redirect result user:", result.user);
+        }
+      })
+      .catch(handleAuthError); // Handle potential errors during redirect result retrieval
+  }, []); // Empty dependency array ensures this runs only once on mount
 
   const handleAuthError = (err: unknown) => {
     if (err instanceof Error && 'code' in err && 'message' in err) {
@@ -69,7 +84,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setLoading(false);
   }
 
-
   const handlePopupError = (err: unknown) => {
     if (typeof err === 'object' && err !== null && 'code' in err && err.code === 'auth/popup-blocked') {
       alert(
@@ -80,44 +94,36 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }
 
-
-
   const socialSignIn = async (provider: FirebaseAuthProvider) => {
     setLoading(true);
     setError(null);
 
     try {
-      await signInWithRedirect(auth, provider);
+      await signInWithRedirect(firebaseAuth, provider);
       router.push('/dashboard')
-
     } catch (err) {
       handlePopupError(err);
       handleAuthError(err);
-      
     }
   };
 
   const googleSignIn = async () => {
     await socialSignIn(new GoogleAuthProvider());
-
   }
+
   const githubSignIn = async () => {
-
     await socialSignIn(new GithubAuthProvider());
-
   }
+
   const facebookSignIn = async () => {
-
     await socialSignIn(new FacebookAuthProvider()); // Note: Requires Facebook App setup
-
   }
 
   const registerWithEmail = async (data: z.infer<typeof registerSchema>) => {
-
     setLoading(true);
     setError(null);
     try {
-      await createUserWithEmailAndPassword(auth, data.email, data.password);
+      await createUserWithEmailAndPassword(firebaseAuth, data.email, data.password);
       router.push('/dashboard');
     } catch (err) {
       handleAuthError(err)
@@ -127,9 +133,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const emailSignIn = async (data: z.infer<typeof loginSchema>) => {
     setError(null);
     try {
-      await signInWithEmailAndPassword(auth, data.email, data.password);
-        router.push('/dashboard');
-
+      await signInWithEmailAndPassword(firebaseAuth, data.email, data.password);
+      router.push('/dashboard');
     } catch (err) {
       handlePopupError(err);
       handleAuthError(err);
@@ -140,7 +145,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setLoading(true);
     setError(null);
     try {
-      await firebaseSignOut(auth);
+      await firebaseSignOut(firebaseAuth);
       // Auth state listener will handle setting user and loading state
     } catch (err) {
       handleAuthError(err);
