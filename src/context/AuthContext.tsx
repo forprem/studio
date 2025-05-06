@@ -1,15 +1,16 @@
 "use client";
 
-import type { ReactNode, } from "react";
+import type { ReactNode } from "react";
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { 
+import { useRouter } from 'next/navigation';
+import {
   onAuthStateChanged,
   signOut as firebaseSignOut,
   User,
   GoogleAuthProvider,
   GithubAuthProvider,
   FacebookAuthProvider,
-  
+  signInWithRedirect,
   signInWithPopup,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -17,6 +18,7 @@ import {
 } from 'firebase/auth';
 import { auth } from '@/lib/firebase/config';
 import type { AuthProvider as FirebaseAuthProvider } from 'firebase/auth';
+
 import type { z } from 'zod';
 
 import type { loginSchema, registerSchema } from '@/schemas/auth';
@@ -39,8 +41,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<AuthError | null>(null);
+  const router = useRouter();
 
-  
   useEffect(() => {
     console.log('AuthContext useEffect called');
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -48,23 +50,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setUser(currentUser);
       setLoading(false);
       setError(null); // Clear error on auth state change
-      });
+    });
     return () => unsubscribe();
   }, []);
 
 
   const handleAuthError = (err: unknown) => {
-     if (err instanceof Error && 'code' in err && 'message' in err) {
-        // Check if it behaves like a Firebase AuthError
-        const authError = err as AuthError;
-        console.error("Firebase Auth Error:", authError.code, authError.message);
-        setError(authError);
-      } else {
-        console.error("An unexpected error occurred:", err);
-        // Create a generic AuthError-like object for consistency if needed
-        setError({ code: 'unknown-error', message: 'An unexpected error occurred.' } as AuthError);
-      }
-      setLoading(false);
+    if (err instanceof Error && 'code' in err && 'message' in err) {
+      // Check if it behaves like a Firebase AuthError
+      const authError = err as AuthError;
+      console.error("Firebase Auth Error:", authError.code, authError.message);
+      setError(authError);
+    } else {
+      console.error("An unexpected error occurred:", err);
+      // Create a generic AuthError-like object for consistency if needed
+      setError({ code: 'unknown-error', message: 'An unexpected error occurred.' } as AuthError);
+    }
+    setLoading(false);
   }
 
 
@@ -74,75 +76,64 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         'Popup blocked! Please allow popups for this site to sign in. You can enable it by clicking in the top right corner of the address bar.'
       );
     } else {
-        console.error('Firebase Auth Popup Error:', err); 
+      console.error('Firebase Auth Popup Error:', err);
     }
   }
 
-  
-  
 
 
   const socialSignIn = async (provider: FirebaseAuthProvider) => {
     setLoading(true);
     setError(null);
+
     try {
-      const result = await signInWithPopup(auth, provider);
-      
+      await signInWithRedirect(auth, provider);
+      router.push('/dashboard')
+
     } catch (err) {
-        handlePopupError(err);
-        handleAuthError(err);
-        setTimeout(() => {
-          window.location.assign('/auth/login');
-        }, 500);
+      handlePopupError(err);
+      handleAuthError(err);
+      
     }
   };
 
   const googleSignIn = async () => {
     await socialSignIn(new GoogleAuthProvider());
-    setTimeout(() => {
-        window.location.assign('/dashboard');    
-    }, 500);
 
   }
   const githubSignIn = async () => {
+
     await socialSignIn(new GithubAuthProvider());
-    setTimeout(() => {
-        window.location.assign('/dashboard');
-    }, 500);
-    
+
   }
   const facebookSignIn = async () => {
-    await socialSignIn(new FacebookAuthProvider()); // Note: Requires Facebook App setup
-    setTimeout(() => {
-        window.location.assign('/dashboard');
-    }, 500);
 
-    
+    await socialSignIn(new FacebookAuthProvider()); // Note: Requires Facebook App setup
+
   }
 
   const registerWithEmail = async (data: z.infer<typeof registerSchema>) => {
 
     setLoading(true);
     setError(null);
-      try {
-          await createUserWithEmailAndPassword(auth, data.email, data.password);
-          window.location.assign('/dashboard');
+    try {
+      await createUserWithEmailAndPassword(auth, data.email, data.password);
+      router.push('/dashboard');
     } catch (err) {
-        handleAuthError(err)
+      handleAuthError(err)
     }
-    };
+  };
 
   const emailSignIn = async (data: z.infer<typeof loginSchema>) => {
-        setError(null);
-        try {
-            await signInWithEmailAndPassword(auth, data.email, data.password);
-            setTimeout(() => {
-                window.location.assign('/dashboard');
-            }, 500);
-        } catch (err) {
-            handlePopupError(err);
-            handleAuthError(err);
-        }
+    setError(null);
+    try {
+      await signInWithEmailAndPassword(auth, data.email, data.password);
+        router.push('/dashboard');
+
+    } catch (err) {
+      handlePopupError(err);
+      handleAuthError(err);
+    }
   };
 
   const signOut = async () => {
@@ -164,6 +155,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     signInWithGithub: githubSignIn,
     signInWithFacebook: facebookSignIn,
     registerWithEmail,
+    loginWithEmail: emailSignIn,
     signOut,
   };
 
